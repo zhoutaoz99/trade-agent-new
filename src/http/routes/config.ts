@@ -5,6 +5,12 @@ import { mcpManager } from "../../mcp/manager.js";
 import { reconcileSchedule } from "../../cron/scheduler.js";
 
 const modelRef = z.object({ provider: z.string().min(1), model: z.string().min(1) });
+const customProviderSchema = z.object({
+  provider: z.string().trim().min(1),
+  models: z.array(z.string().trim().min(1)).default([]),
+  apiKey: z.string().optional(),
+  baseUrl: z.string().optional(),
+});
 const memberSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -22,6 +28,7 @@ const mcpServerSchema = z.object({
 });
 const configBody = z.object({
   cronExpr: z.string().min(1),
+  customProviders: z.array(customProviderSchema).default([]),
   trader: z.object({
     model: modelRef,
     systemPrompt: z.string().default(""),

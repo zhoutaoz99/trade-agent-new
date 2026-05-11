@@ -18,6 +18,7 @@ export async function runFlow(ctx: FlowContext): Promise<FlowResult> {
   const trader = helpers.makeTraderAgent({
     runId,
     config: config.trader,
+    customProviders: config.customProviders,
     previousAdvices,
     mcpTools: helpers.getMcpTools(),
   });

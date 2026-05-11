@@ -2,7 +2,7 @@ import { Agent, type AgentOptions, type AgentTool } from "@earendil-works/pi-age
 import type { Message } from "@earendil-works/pi-ai";
 import { getApiKey, resolveModel } from "../ai/models.js";
 import { bindAgentToBus, type AgentBindContext } from "./agent-events.js";
-import type { CommitteeMemberConfig, ModelRef, TraderConfig } from "../types.js";
+import type { CommitteeMemberConfig, LlmProviderConfig, ModelRef, TraderConfig } from "../types.js";
 
 /** Default identity conversion: filter to real LLM messages. */
 export function defaultConvertToLlm(messages: any[]): Message[] {
@@ -15,6 +15,7 @@ export function defaultConvertToLlm(messages: any[]): Message[] {
 export interface MakeAgentOptions extends AgentBindContext {
   systemPrompt: string;
   model: ModelRef;
+  customProviders?: LlmProviderConfig[];
   tools?: AgentTool<any>[];
   sessionId?: string;
   extraOptions?: Partial<AgentOptions>;
@@ -24,13 +25,13 @@ export function makeAgent(opts: MakeAgentOptions): Agent {
   const agent = new Agent({
     initialState: {
       systemPrompt: opts.systemPrompt,
-      model: resolveModel(opts.model),
+      model: resolveModel(opts.model, opts.customProviders),
       tools: opts.tools ?? [],
       messages: [],
       thinkingLevel: "off",
     },
     convertToLlm: defaultConvertToLlm,
-    getApiKey,
+    getApiKey: (provider) => getApiKey(provider, opts.customProviders),
     sessionId: opts.sessionId,
     ...opts.extraOptions,
   });
@@ -74,6 +75,7 @@ export function composeTraderSystemPrompt(base: string, prevAdvices: string[]): 
 export interface MakeTraderOptions {
   runId: string;
   config: TraderConfig;
+  customProviders?: LlmProviderConfig[];
   previousAdvices: string[];
   mcpTools: AgentTool<any>[];
 }
@@ -86,18 +88,24 @@ export function makeTraderAgent(opts: MakeTraderOptions): Agent {
     agentRole: "trader",
     systemPrompt,
     model: opts.config.model,
+    customProviders: opts.customProviders,
     tools: opts.mcpTools,
     sessionId: `${opts.runId}:trader`,
   });
 }
 
-export function makeMemberAgent(runId: string, member: CommitteeMemberConfig): Agent {
+export function makeMemberAgent(
+  runId: string,
+  member: CommitteeMemberConfig,
+  customProviders?: LlmProviderConfig[],
+): Agent {
   return makeAgent({
     runId,
     agentId: `member:${member.id}`,
     agentRole: "member",
     systemPrompt: member.systemPrompt,
     model: member.model,
+    customProviders,
     sessionId: `${runId}:member:${member.id}`,
   });
 }
@@ -106,6 +114,7 @@ export function makeChairmanAgent(
   runId: string,
   chairman: CommitteeMemberConfig,
   tools: AgentTool<any>[],
+  customProviders?: LlmProviderConfig[],
 ): Agent {
   return makeAgent({
     runId,
@@ -113,6 +122,7 @@ export function makeChairmanAgent(
     agentRole: "chairman",
     systemPrompt: chairman.systemPrompt,
     model: chairman.model,
+    customProviders,
     tools,
     sessionId: `${runId}:chairman`,
   });

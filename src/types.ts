@@ -5,6 +5,13 @@ export interface ModelRef {
   model: string;
 }
 
+export interface LlmProviderConfig {
+  provider: string;
+  models: string[];
+  apiKey?: string;
+  baseUrl?: string;
+}
+
 export interface TraderConfig {
   model: ModelRef;
   systemPrompt: string;
@@ -40,6 +47,7 @@ export interface McpServerConfig {
 export interface AppConfig {
   id?: number;
   cronExpr: string;
+  customProviders: LlmProviderConfig[];
   trader: TraderConfig;
   committee: CommitteeConfig;
   mcpServers: McpServerConfig[];

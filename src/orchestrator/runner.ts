@@ -61,7 +61,7 @@ async function executeRun(runId: string): Promise<void> {
         makeAgent,
         makeTraderAgent,
         runCommittee: ({ traderOutput, cfg: commCfg }) =>
-          runCommittee({ runId, traderOutput, cfg: commCfg }),
+          runCommittee({ runId, traderOutput, cfg: commCfg, customProviders: cfg.customProviders }),
         promptAndCollect,
         getMcpTools: () => mcpManager.getAllTools(),
       },

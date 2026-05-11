@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import cronstrue from "cronstrue";
-import { api, type AppConfig, type CommitteeMember, type ProviderInfo } from "../api";
+import { api, type AppConfig, type CommitteeMember, type LlmProviderConfig, type ModelRef } from "../api";
+
+const DEFAULT_CUSTOM_PROVIDERS: LlmProviderConfig[] = [
+  { provider: "poe", models: [], apiKey: "", baseUrl: "https://api.poe.com/v1" },
+  { provider: "deepseek", models: ["deepseek-chat"], apiKey: "", baseUrl: "https://api.deepseek.com" },
+];
 
 function emptyMember(id: string, name: string): CommitteeMember {
   return {
     id,
     name,
-    model: { provider: "anthropic", model: "claude-sonnet-4-5" },
+    model: { provider: "deepseek", model: "deepseek-chat" },
     systemPrompt: "",
   };
 }
@@ -14,8 +19,9 @@ function emptyMember(id: string, name: string): CommitteeMember {
 function emptyConfig(): AppConfig {
   return {
     cronExpr: "*/30 * * * *",
+    customProviders: DEFAULT_CUSTOM_PROVIDERS,
     trader: {
-      model: { provider: "anthropic", model: "claude-sonnet-4-5" },
+      model: { provider: "deepseek", model: "deepseek-chat" },
       systemPrompt: "",
     },
     committee: {
@@ -28,30 +34,63 @@ function emptyConfig(): AppConfig {
   };
 }
 
+function normalizeModelsText(text: string): string[] {
+  return Array.from(
+    new Set(
+      text
+        .split(/\r?\n|,/)
+        .map((model) => model.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function normalizeProviders(providers: LlmProviderConfig[]): LlmProviderConfig[] {
+  return providers
+    .map((provider) => ({
+      provider: provider.provider.trim(),
+      models: normalizeModelsText(provider.models.join("\n")),
+      apiKey: provider.apiKey?.trim() || undefined,
+      baseUrl: provider.baseUrl?.trim() || undefined,
+    }))
+    .filter((provider) => provider.provider);
+}
+
+function firstModelRef(providers: LlmProviderConfig[]): ModelRef {
+  const first = providers[0];
+  const models = normalizeModelsText(first?.models.join("\n") ?? "");
+  return { provider: first?.provider ?? "", model: models[0] ?? "" };
+}
+
 function ModelPicker({
   providers,
   value,
   onChange,
 }: {
-  providers: ProviderInfo[];
+  providers: LlmProviderConfig[];
   value: { provider: string; model: string };
   onChange: (v: { provider: string; model: string }) => void;
 }) {
   const current = providers.find((p) => p.provider === value.provider);
+  const currentModels = normalizeModelsText(current?.models.join("\n") ?? "");
+  const providerOptions: LlmProviderConfig[] =
+    value.provider && !current
+      ? [{ provider: value.provider, models: value.model ? [value.model] : [] }, ...providers]
+      : providers;
   return (
     <div className="row">
       <select
         value={value.provider}
         onChange={(e) => {
           const p = providers.find((p) => p.provider === e.target.value);
-          const first = p?.models[0]?.id ?? "";
+          const first = normalizeModelsText(p?.models.join("\n") ?? "")[0] ?? "";
           onChange({ provider: e.target.value, model: first });
         }}
       >
-        {providers.map((p) => (
+        {providerOptions.length === 0 && <option value="">Add a provider first</option>}
+        {providerOptions.map((p) => (
           <option key={p.provider} value={p.provider}>
             {p.provider}
-            {p.hasKey ? "" : "  (no key)"}
           </option>
         ))}
       </select>
@@ -63,9 +102,9 @@ function ModelPicker({
         placeholder="model id"
       />
       <datalist id={`models-${value.provider}`}>
-        {current?.models.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.name ?? m.id}
+        {currentModels.map((m) => (
+          <option key={m} value={m}>
+            {m}
           </option>
         ))}
       </datalist>
@@ -81,7 +120,7 @@ function MemberEditor({
   removable,
 }: {
   member: CommitteeMember;
-  providers: ProviderInfo[];
+  providers: LlmProviderConfig[];
   onChange: (m: CommitteeMember) => void;
   onRemove?: () => void;
   removable?: boolean;
@@ -123,7 +162,6 @@ function MemberEditor({
 
 export function ConfigPage() {
   const [config, setConfig] = useState<AppConfig | null>(null);
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -131,8 +169,7 @@ export function ConfigPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [c, p] = await Promise.all([api.getConfig(), api.listProviders()]);
-        setProviders(p.providers);
+        const c = await api.getConfig();
         setConfig(c.config ?? emptyConfig());
       } catch (e: any) {
         setError(e?.message ?? String(e));
@@ -151,8 +188,92 @@ export function ConfigPage() {
 
   if (!config) return <div className="card">Loading…</div>;
 
+  const providers = config.customProviders ?? [];
+
   function update<K extends keyof AppConfig>(key: K, value: AppConfig[K]) {
     setConfig((c) => (c ? { ...c, [key]: value } : c));
+  }
+
+  function updateProvider(idx: number, nextProvider: LlmProviderConfig) {
+    const previousProvider = providers[idx]?.provider;
+    setConfig((current) => {
+      if (!current) return current;
+      const nextProviders = current.customProviders.slice();
+      nextProviders[idx] = nextProvider;
+
+      const rewriteModel = (model: ModelRef): ModelRef => {
+        if (!previousProvider || !nextProvider.provider || model.provider !== previousProvider) return model;
+        return { ...model, provider: nextProvider.provider, model: model.model || nextProvider.models[0] || "" };
+      };
+
+      return {
+        ...current,
+        customProviders: nextProviders,
+        trader: { ...current.trader, model: rewriteModel(current.trader.model) },
+        committee: {
+          ...current.committee,
+          chairman: {
+            ...current.committee.chairman,
+            model: rewriteModel(current.committee.chairman.model),
+          },
+          members: current.committee.members.map((member) => ({
+            ...member,
+            model: rewriteModel(member.model),
+          })),
+        },
+      };
+    });
+  }
+
+  function addProvider() {
+    const nextProvider: LlmProviderConfig = {
+      provider: `custom-${providers.length + 1}`,
+      models: ["model-id"],
+      apiKey: "",
+    };
+    setConfig((current) => {
+      if (!current) return current;
+      const nextProviders = [...current.customProviders, nextProvider];
+      const model = firstModelRef(nextProviders);
+      return {
+        ...current,
+        customProviders: nextProviders,
+        trader: current.trader.model.provider ? current.trader : { ...current.trader, model },
+        committee: {
+          ...current.committee,
+          chairman: current.committee.chairman.model.provider
+            ? current.committee.chairman
+            : { ...current.committee.chairman, model },
+        },
+      };
+    });
+  }
+
+  function removeProvider(idx: number) {
+    const removedProvider = providers[idx]?.provider;
+    setConfig((current) => {
+      if (!current) return current;
+      const nextProviders = current.customProviders.filter((_, i) => i !== idx);
+      const fallback = firstModelRef(nextProviders);
+      const rewriteModel = (model: ModelRef): ModelRef =>
+        removedProvider && model.provider === removedProvider ? fallback : model;
+      return {
+        ...current,
+        customProviders: nextProviders,
+        trader: { ...current.trader, model: rewriteModel(current.trader.model) },
+        committee: {
+          ...current.committee,
+          chairman: {
+            ...current.committee.chairman,
+            model: rewriteModel(current.committee.chairman.model),
+          },
+          members: current.committee.members.map((member) => ({
+            ...member,
+            model: rewriteModel(member.model),
+          })),
+        },
+      };
+    });
   }
 
   async function save() {
@@ -162,7 +283,7 @@ export function ConfigPage() {
     setSuccess(null);
     try {
       const { id: _id, ...payload } = config;
-      const r = await api.putConfig(payload);
+      const r = await api.putConfig({ ...payload, customProviders: normalizeProviders(payload.customProviders) });
       setConfig(r.config);
       setSuccess("Saved. MCP and scheduler are reconciling in the background.");
     } catch (e: any) {
@@ -267,9 +388,13 @@ export function ConfigPage() {
           className="btn"
           onClick={() => {
             const id = `m${config.committee.members.length + 1}`;
+            const model = firstModelRef(providers);
             update("committee", {
               ...config.committee,
-              members: [...config.committee.members, emptyMember(id, `Member ${config.committee.members.length + 1}`)],
+              members: [
+                ...config.committee.members,
+                { ...emptyMember(id, `Member ${config.committee.members.length + 1}`), model },
+              ],
             });
           }}
         >
@@ -401,30 +526,55 @@ export function ConfigPage() {
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Available providers</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Provider</th>
-              <th>Has API key?</th>
-              <th>Env vars checked</th>
-              <th>#Models</th>
-            </tr>
-          </thead>
-          <tbody>
-            {providers.map((p) => (
-              <tr key={p.provider}>
-                <td className="mono">{p.provider}</td>
-                <td>
-                  <span className="badge" style={{ color: p.hasKey ? "var(--green)" : "var(--muted)" }}>
-                    {p.hasKey ? "yes" : "no"}
-                  </span>
-                </td>
-                <td className="small muted">{p.envKeys.join(", ") || "—"}</td>
-                <td>{p.models.length}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {providers.map((provider, idx) => (
+          <div key={idx} className="member-card">
+            <div className="header">
+              <strong>{provider.provider || "(unnamed provider)"}</strong>
+              <button className="btn danger" onClick={() => removeProvider(idx)}>
+                Remove
+              </button>
+            </div>
+            <div className="row">
+              <div>
+                <label>Provider name</label>
+                <input
+                  value={provider.provider}
+                  onChange={(e) => updateProvider(idx, { ...provider, provider: e.target.value })}
+                  placeholder="poe"
+                />
+              </div>
+              <div>
+                <label>API key</label>
+                <input
+                  type="password"
+                  value={provider.apiKey ?? ""}
+                  onChange={(e) => updateProvider(idx, { ...provider, apiKey: e.target.value })}
+                  placeholder="sk-..."
+                />
+              </div>
+            </div>
+            <label>Base URL (optional for known providers)</label>
+            <input
+              value={provider.baseUrl ?? ""}
+              onChange={(e) => updateProvider(idx, { ...provider, baseUrl: e.target.value })}
+              placeholder="https://api.example.com/v1"
+            />
+            <label>Supported models (one per line or comma-separated)</label>
+            <textarea
+              value={provider.models.join("\n")}
+              onChange={(e) => updateProvider(idx, { ...provider, models: e.target.value.split(/\r?\n/) })}
+              placeholder={"gpt-5\nclaude-sonnet-4-5"}
+            />
+          </div>
+        ))}
+        {providers.length === 0 && (
+          <div className="small muted" style={{ marginBottom: 10 }}>
+            Add at least one provider before selecting models for Trader or Committee.
+          </div>
+        )}
+        <button className="btn" onClick={addProvider}>
+          + Add provider
+        </button>
       </div>
     </div>
   );

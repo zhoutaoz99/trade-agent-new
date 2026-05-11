@@ -1,10 +1,48 @@
-import type { AppConfig, RunEvent, RunRow, RunStatus, RunTrigger } from "../types.js";
+import type {
+  AppConfig,
+  LlmProviderConfig,
+  RunEvent,
+  RunRow,
+  RunStatus,
+  RunTrigger,
+} from "../types.js";
 import { pool, withTx } from "./pool.js";
+
+function normalizeModels(models: unknown): string[] {
+  if (!Array.isArray(models)) return [];
+  return Array.from(
+    new Set(
+      models
+        .map((model) => (typeof model === "string" ? model.trim() : ""))
+        .filter(Boolean),
+    ),
+  );
+}
+
+function normalizeCustomProviders(providers: unknown): LlmProviderConfig[] {
+  if (!Array.isArray(providers)) return [];
+  return providers
+    .map((raw) => {
+      if (!raw || typeof raw !== "object") return null;
+      const item = raw as Record<string, unknown>;
+      const provider = typeof item.provider === "string" ? item.provider.trim() : "";
+      if (!provider) return null;
+      const cfg: LlmProviderConfig = {
+        provider,
+        models: normalizeModels(item.models),
+      };
+      if (typeof item.apiKey === "string" && item.apiKey) cfg.apiKey = item.apiKey;
+      if (typeof item.baseUrl === "string" && item.baseUrl.trim()) cfg.baseUrl = item.baseUrl.trim();
+      return cfg;
+    })
+    .filter((provider): provider is LlmProviderConfig => !!provider);
+}
 
 function rowToConfig(row: any): AppConfig {
   return {
     id: Number(row.id),
     cronExpr: row.cron_expr,
+    customProviders: normalizeCustomProviders(row.custom_providers),
     trader: row.trader,
     committee: row.committee,
     mcpServers: row.mcp_servers,
@@ -40,10 +78,11 @@ export async function createAndActivateConfig(cfg: Omit<AppConfig, "id">): Promi
   return withTx(async (client) => {
     await client.query("update config set active = false where active = true");
     const r = await client.query(
-      `insert into config (cron_expr, trader, committee, mcp_servers, active)
-       values ($1,$2::jsonb,$3::jsonb,$4::jsonb,true) returning *`,
+      `insert into config (cron_expr, custom_providers, trader, committee, mcp_servers, active)
+       values ($1,$2::jsonb,$3::jsonb,$4::jsonb,$5::jsonb,true) returning *`,
       [
         cfg.cronExpr,
+        JSON.stringify(normalizeCustomProviders(cfg.customProviders)),
         JSON.stringify(cfg.trader),
         JSON.stringify(cfg.committee),
         JSON.stringify(cfg.mcpServers ?? []),

@@ -1,7 +1,7 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
 import { bus } from "../bus/event-bus.js";
-import type { CommitteeConfig } from "../types.js";
+import type { CommitteeConfig, LlmProviderConfig } from "../types.js";
 import { collectLastAssistantText, makeChairmanAgent, makeMemberAgent, promptAndCollect } from "./helpers.js";
 
 export interface RoundTurn {
@@ -145,17 +145,18 @@ export async function runCommittee(args: {
   runId: string;
   traderOutput: string;
   cfg: CommitteeConfig;
+  customProviders?: LlmProviderConfig[];
 }): Promise<{ advice: string; rationale: string; transcript: CommitteeRound[]; rounds: number }> {
-  const { runId, traderOutput, cfg } = args;
+  const { runId, traderOutput, cfg, customProviders } = args;
   const totalRounds = Math.max(1, Math.min(cfg.maxRounds ?? 3, 10));
 
   const members = cfg.members.map((m) => ({
     cfg: m,
-    agent: makeMemberAgent(runId, m),
+    agent: makeMemberAgent(runId, m, customProviders),
   }));
 
   const slot: DecisionSlot = { current: null };
-  const chairman = makeChairmanAgent(runId, cfg.chairman, buildChairmanTools(slot));
+  const chairman = makeChairmanAgent(runId, cfg.chairman, buildChairmanTools(slot), customProviders);
 
   const transcript: CommitteeRound[] = [];
   let focus = cfg.initialFocus ?? "Review the trade and identify risks/opportunities.";

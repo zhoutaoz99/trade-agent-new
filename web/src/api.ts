@@ -3,6 +3,13 @@ export interface ModelRef {
   model: string;
 }
 
+export interface LlmProviderConfig {
+  provider: string;
+  models: string[];
+  apiKey?: string;
+  baseUrl?: string;
+}
+
 export interface CommitteeMember {
   id: string;
   name: string;
@@ -13,6 +20,7 @@ export interface CommitteeMember {
 export interface AppConfig {
   id?: number;
   cronExpr: string;
+  customProviders: LlmProviderConfig[];
   trader: { model: ModelRef; systemPrompt: string; maxToolCalls?: number };
   committee: {
     chairman: CommitteeMember;

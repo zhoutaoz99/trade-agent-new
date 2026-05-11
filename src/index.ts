@@ -9,8 +9,12 @@ import { mcpManager } from "./mcp/manager.js";
 
 const SEED_CONFIG = {
   cronExpr: "*/30 * * * *",
+  customProviders: [
+    { provider: "poe", models: [], baseUrl: "https://api.poe.com/v1" },
+    { provider: "deepseek", models: ["deepseek-chat"], baseUrl: "https://api.deepseek.com" },
+  ],
   trader: {
-    model: { provider: "anthropic", model: "claude-sonnet-4-5" },
+    model: { provider: "deepseek", model: "deepseek-chat" },
     systemPrompt:
       "You are an autonomous crypto trading agent. Use the available trading tools to inspect markets " +
       "and execute trades when justified. Be cautious, document your reasoning, and finish with a clear summary.",
@@ -19,7 +23,7 @@ const SEED_CONFIG = {
     chairman: {
       id: "chairman",
       name: "Chairman",
-      model: { provider: "anthropic", model: "claude-sonnet-4-5" },
+      model: { provider: "deepseek", model: "deepseek-chat" },
       systemPrompt:
         "You chair an advisory committee of investment specialists. After each round you must call exactly " +
         "one tool: `conclude` (with concrete advice) or `continue_debate` (with focus questions). Be decisive.",
@@ -28,7 +32,7 @@ const SEED_CONFIG = {
       {
         id: "bull",
         name: "Bull",
-        model: { provider: "openai", model: "gpt-5" },
+        model: { provider: "deepseek", model: "deepseek-chat" },
         systemPrompt:
           "You are a bullish growth-oriented analyst. Identify upside opportunities and constructive risk-taking.",
       },
