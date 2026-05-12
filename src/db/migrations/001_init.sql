@@ -6,6 +6,7 @@ create table if not exists config (
   trader       jsonb not null,
   committee    jsonb not null,
   mcp_servers  jsonb not null,
+  custom_providers jsonb not null,
   active       boolean not null default false,
   created_at   timestamptz not null default now()
 );

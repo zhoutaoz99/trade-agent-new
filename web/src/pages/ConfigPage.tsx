@@ -94,20 +94,17 @@ function ModelPicker({
           </option>
         ))}
       </select>
-      <input
-        type="text"
-        list={`models-${value.provider}`}
+      <select
         value={value.model}
         onChange={(e) => onChange({ ...value, model: e.target.value })}
-        placeholder="model id"
-      />
-      <datalist id={`models-${value.provider}`}>
+      >
+        {currentModels.length === 0 && <option value="">No models configured</option>}
         {currentModels.map((m) => (
           <option key={m} value={m}>
             {m}
           </option>
         ))}
-      </datalist>
+      </select>
     </div>
   );
 }

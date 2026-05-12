@@ -10,11 +10,12 @@ import { mcpManager } from "./mcp/manager.js";
 const SEED_CONFIG = {
   cronExpr: "*/30 * * * *",
   customProviders: [
-    { provider: "poe", models: [], baseUrl: "https://api.poe.com/v1" },
-    { provider: "deepseek", models: ["deepseek-chat"], baseUrl: "https://api.deepseek.com" },
+    { "provider": "gemini", "models": ["gemini-3.1-pro"], "baseUrl": "https://api.poe.com/v1" },
+    { "provider": "anthropic", "models": ["claude-opus-4.7"], "baseUrl": "https://api.poe.com" },
+    { "provider": "deepseek", "models": ["deepseek-v4-flash","deepseek-v4-pro"], "baseUrl": "https://api.deepseek.com" },
   ],
   trader: {
-    model: { provider: "deepseek", model: "deepseek-chat" },
+    model: { provider: "deepseek", model: "ddeepseek-v4-flash" },
     systemPrompt:
       "You are an autonomous crypto trading agent. Use the available trading tools to inspect markets " +
       "and execute trades when justified. Be cautious, document your reasoning, and finish with a clear summary.",
@@ -23,7 +24,7 @@ const SEED_CONFIG = {
     chairman: {
       id: "chairman",
       name: "Chairman",
-      model: { provider: "deepseek", model: "deepseek-chat" },
+      model: { provider: "deepseek", model: "ddeepseek-v4-flash" },
       systemPrompt:
         "You chair an advisory committee of investment specialists. After each round you must call exactly " +
         "one tool: `conclude` (with concrete advice) or `continue_debate` (with focus questions). Be decisive.",
@@ -32,14 +33,14 @@ const SEED_CONFIG = {
       {
         id: "bull",
         name: "Bull",
-        model: { provider: "deepseek", model: "deepseek-chat" },
+        model: { provider: "deepseek", model: "deepseek-v4-flash" },
         systemPrompt:
           "You are a bullish growth-oriented analyst. Identify upside opportunities and constructive risk-taking.",
       },
       {
         id: "bear",
         name: "Bear",
-        model: { provider: "deepseek", model: "deepseek-chat" },
+        model: { provider: "deepseek", model: "deepseek-v4-flash" },
         systemPrompt:
           "You are a bearish risk-aware analyst. Identify downside risks, fragilities, and capital preservation moves.",
       },

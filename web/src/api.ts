@@ -98,7 +98,7 @@ export const api = {
   getRun: (id: string) => http<{ run: RunRow }>("GET", `/api/runs/${id}`),
   listRunEvents: (id: string, afterSeq = 0) =>
     http<{ events: RunEvent[] }>("GET", `/api/runs/${id}/events?afterSeq=${afterSeq}`),
-  trigger: () => http<{ runId: string; status: "started" | "skipped"; reason?: string }>("POST", "/api/runs/trigger"),
+  trigger: () => http<{ runId: string; status: "started" | "skipped"; reason?: string }>("POST", "/api/runs/trigger", {}),
   listProviders: () => http<{ providers: ProviderInfo[] }>("GET", "/api/models"),
   listMcpTools: () =>
     http<{
